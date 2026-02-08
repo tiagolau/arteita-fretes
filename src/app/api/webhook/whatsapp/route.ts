@@ -15,24 +15,52 @@ interface MessagePayload {
 // ============================================
 
 function extractMessagePayload(message: Record<string, unknown>): MessagePayload | null {
+  console.log('[WEBHOOK] Extracting payload from:', JSON.stringify(message));
   if (message.conversation) {
+    console.log('[WEBHOOK] Type detected: text (conversation)');
     return { type: 'text', text: message.conversation as string };
   }
   if (message.extendedTextMessage) {
+    console.log('[WEBHOOK] Type detected: extendedText');
     const ext = message.extendedTextMessage as Record<string, unknown>;
     return { type: 'text', text: (ext.text as string) || '' };
   }
   if (message.imageMessage) {
+    console.log('[WEBHOOK] Type detected: image');
     const img = message.imageMessage as Record<string, unknown>;
     return { type: 'image', text: (img.caption as string) || undefined };
   }
   if (message.documentMessage) {
+    console.log('[WEBHOOK] Type detected: document');
     const doc = message.documentMessage as Record<string, unknown>;
     return { type: 'document', text: (doc.caption as string) || (doc.fileName as string) || undefined };
   }
   if (message.audioMessage) {
+    console.log('[WEBHOOK] Type detected: audio');
     return { type: 'audio' };
   }
+
+  // Suporte a viewOnceMessage (imagens/vídeos de visualização única)
+  if (message.viewOnceMessage) {
+    console.log('[WEBHOOK] Type detected: viewOnceMessage');
+    const viewOnce = message.viewOnceMessage as Record<string, unknown>;
+    const messageContent = viewOnce.message as Record<string, unknown>;
+    if (messageContent) {
+      return extractMessagePayload(messageContent);
+    }
+  }
+
+  // Suporte a viewOnceMessageV2
+  if (message.viewOnceMessageV2) {
+    console.log('[WEBHOOK] Type detected: viewOnceMessageV2');
+    const viewOnce = message.viewOnceMessageV2 as Record<string, unknown>;
+    const messageContent = viewOnce.message as Record<string, unknown>;
+    if (messageContent) {
+      return extractMessagePayload(messageContent);
+    }
+  }
+
+  console.log('[WEBHOOK] Unknown message type');
   return null;
 }
 
@@ -97,6 +125,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log('[WEBHOOK] Recebido payload:', JSON.stringify(body, null, 2));
 
     // Detectar origem do webhook
     if (body.object === 'whatsapp_business_account') {
@@ -144,16 +173,25 @@ async function handleEvolutionWebhook(body: Record<string, unknown>) {
   const isPrivate = remoteJid.endsWith('@s.whatsapp.net');
 
   if (isPrivate) {
+    console.log(`[WEBHOOK] Private message from ${remoteJid}`);
     const phoneNumber = remoteJid.replace('@s.whatsapp.net', '');
     const messagePayload = extractMessagePayload(message);
+
     if (!messagePayload) {
+      console.log('[WEBHOOK] Payload extraction failed or unsupported type');
       return NextResponse.json({ status: 'unsupported' }, { status: 200 });
     }
+
     if (messagePayload.type !== 'text') {
       messagePayload.mediaMessageId = messageId;
+      console.log(`[WEBHOOK] Media message detected. ID: ${messageId}`);
+    } else {
+      console.log('[WEBHOOK] Text message detected');
     }
+
     await bot.handleIncomingMessage(phoneNumber, messagePayload);
   } else if (isGroup) {
+    console.log(`[WEBHOOK] Group message from ${remoteJid}`);
     const groupId = remoteJid;
     const participant = (key.participant as string) || (data.participant as string) || '';
     const senderNumber = participant.replace('@s.whatsapp.net', '');
