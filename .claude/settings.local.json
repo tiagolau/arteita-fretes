@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.arteita.com.br)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pg_isready:*)",
+      "Bash(docker run:*)",
+      "Bash(docker rm:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(npm install:*)",
+      "WebSearch",
+      "WebFetch(domain:doc.evolution-api.com)",
+      "WebFetch(domain:www.postman.com)",
+      "WebFetch(domain:business.whatsapp.com)",
+      "WebFetch(domain:www.socialintents.com)",
+      "WebFetch(domain:www.devopsschool.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:www.plivo.com)",
+      "WebFetch(domain:docs.evolution-api.com)",
+      "WebFetch(domain:www.scribd.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:docs.evoapicloud.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// AUTENTICAÇÃO E USUÁRIOS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  GESTOR
+  OPERADOR
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(OPERADOR)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ============================================
+// CADASTROS BASE
+// ============================================
+
+model Motorista {
+  id        String   @id @default(cuid())
+  nome      String
+  cnh       String?
+  telefone  String?
+  whatsapp  String?  @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  fretes Frete[]
+
+  @@map("motoristas")
+}
+
+model Caminhao {
+  id         String  @id @default(cuid())
+  placa      String  @unique
+  modelo     String?
+  capacidade Float?  // toneladas
+  active     Boolean @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  fretes Frete[]
+
+  @@map("caminhoes")
+}
+
+model Transportadora {
+  id        String  @id @default(cuid())
+  razaoSocial String @map("razao_social")
+  cnpj      String? @unique
+  contato   String?
+  telefone  String?
+  active    Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  fretes Frete[]
+
+  @@map("transportadoras")
+}
+
+model OrigemDestino {
+  id     String  @id @default(cuid())
+  nome   String
+  cidade String?
+  uf     String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  fretesOrigem  Frete[] @relation("FreteOrigem")
+  fretesDestino Frete[] @relation("FreteDestino")
+
+  @@map("origens_destinos")
+}
+
+// ============================================
+// FRETES
+// ============================================
+
+enum FreteStatus {
+  PENDENTE
+  VALIDADO
+  REJEITADO
+}
+
+enum FreteOrigem {
+  MANUAL
+  WHATSAPP
+}
+
+model Frete {
+  id              String       @id @default(cuid())
+  data            DateTime
+  origemId        String       @map("origem_id")
+  destinoId       String       @map("destino_id")
+  toneladas       Float
+  precoTonelada   Float        @map("preco_tonelada")
+  valorTotal      Float        @map("valor_total")
+  transportadoraId String      @map("transportadora_id")
+  ticketNota      String       @map("ticket_nota") @unique
+  caminhaoId      String       @map("caminhao_id")
+  motoristaId     String       @map("motorista_id")
+  observacao      String?
+  status          FreteStatus  @default(PENDENTE)
+  origemRegistro  FreteOrigem  @default(MANUAL) @map("origem_registro")
+  anexoUrl        String?      @map("anexo_url")
+  deletedAt       DateTime?    @map("deleted_at")
+  deleteMotivo    String?      @map("delete_motivo")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  origem         OrigemDestino  @relation("FreteOrigem", fields: [origemId], references: [id])
+  destino        OrigemDestino  @relation("FreteDestino", fields: [destinoId], references: [id])
+  transportadora Transportadora @relation(fields: [transportadoraId], references: [id])
+  caminhao       Caminhao       @relation(fields: [caminhaoId], references: [id])
+  motorista      Motorista      @relation(fields: [motoristaId], references: [id])
+
+  @@map("fretes")
+}
+
+// ============================================
+// WHATSAPP - CONFIGURAÇÃO
+// ============================================
+
+model WhatsAppConfig {
+  id        String   @id @default(cuid())
+  tipo      String   // "EVOLUTION" ou "META_OFFICIAL"
+  nome      String   // Nome descritivo (ex: "Arteita Principal")
+
+  // Evolution API fields
+  evolutionUrl      String?  @map("evolution_url")
+  evolutionApiKey   String?  @map("evolution_api_key")
+  evolutionInstance String?  @map("evolution_instance")
+
+  // Meta Official API fields
+  metaToken         String?  @map("meta_token")
+  metaPhoneId       String?  @map("meta_phone_id")
+  metaVerifyToken   String?  @map("meta_verify_token")
+  metaAppSecret     String?  @map("meta_app_secret")
+
+  active    Boolean  @default(true)
+  connected Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("whatsapp_configs")
+}
+
+// ============================================
+// WHATSAPP - OPORTUNIDADES (V2)
+// ============================================
+
+enum OportunidadePrioridade {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+enum OportunidadeStatus {
+  NOVA
+  EM_ANALISE
+  ACEITA
+  DESCARTADA
+}
+
+model GrupoWhatsapp {
+  id            String  @id @default(cuid())
+  nome          String
+  grupoId       String  @unique @map("grupo_id")
+  active        Boolean @default(true)
+  palavrasChave String[] @map("palavras_chave")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  oportunidades Oportunidade[]
+
+  @@map("grupos_whatsapp")
+}
+
+model Oportunidade {
+  id            String                 @id @default(cuid())
+  grupoId       String                 @map("grupo_id")
+  mensagemOriginal String              @map("mensagem_original")
+  tipoCarga     String?                @map("tipo_carga")
+  origem        String?
+  destino       String?
+  tonelagem     Float?
+  precoOferecido Float?                @map("preco_oferecido")
+  urgencia      String?
+  contato       String?
+  prioridade    OportunidadePrioridade @default(MEDIA)
+  status        OportunidadeStatus     @default(NOVA)
+  expiresAt     DateTime               @map("expires_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  grupo GrupoWhatsapp @relation(fields: [grupoId], references: [id])
+
+  @@map("oportunidades")
+}
