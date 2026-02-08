@@ -154,6 +154,7 @@ async function handleIncomingMessage(
 
   // Look up motorista by WhatsApp number (normalized)
   const normalizedFrom = normalizePhone(from);
+  console.log(`[Bot] Mensagem recebida de: ${from} (normalizado: ${normalizedFrom})`);
 
   // Buscar todos motoristas ativos e comparar número normalizado
   const motoristas = await db.motorista.findMany({
@@ -162,6 +163,8 @@ async function handleIncomingMessage(
       whatsapp: { not: null },
     },
   });
+
+  console.log(`[Bot] Motoristas no banco: ${motoristas.map((m) => `${m.nome}: ${m.whatsapp} -> ${normalizePhone(m.whatsapp || '')}`).join(', ')}`);
 
   const motorista = motoristas.find((m) => {
     if (!m.whatsapp) return false;
