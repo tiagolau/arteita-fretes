@@ -71,17 +71,41 @@ const FIELD_LABELS: Record<string, string> = {
 // ============================================
 
 /**
- * Normaliza número de telefone para formato apenas dígitos.
- * Remove +, espaços, parênteses, hífens.
- * Se o número tem 10-11 dígitos (sem código do país), adiciona 55 (Brasil).
+ * Normaliza número de telefone brasileiro para comparação.
+ * Retorna array com variações possíveis (com e sem 9º dígito).
+ * Ex: "31991570107" → ["5531991570107", "553191570107"]
  */
-function normalizePhone(phone: string): string {
+function normalizePhoneVariations(phone: string): string[] {
   const digits = phone.replace(/\D/g, '');
-  // Se tem 10 ou 11 dígitos, assumir Brasil e adicionar 55
-  if (digits.length === 10 || digits.length === 11) {
-    return `55${digits}`;
+  const variations: string[] = [];
+
+  let full = digits;
+  // Se tem 10 ou 11 dígitos (sem código do país), adiciona 55
+  if (full.length === 10 || full.length === 11) {
+    full = `55${full}`;
   }
-  return digits;
+  variations.push(full);
+
+  // Gerar variação com/sem 9º dígito (Brasil: 55 + DDD(2) + número)
+  if (full.startsWith('55') && full.length >= 12) {
+    const ddd = full.substring(2, 4);
+    const local = full.substring(4);
+
+    if (local.length === 9 && local.startsWith('9')) {
+      // Tem 9 dígitos, gerar variação sem o 9 extra
+      variations.push(`55${ddd}${local.substring(1)}`);
+    } else if (local.length === 8) {
+      // Tem 8 dígitos, gerar variação com 9 extra
+      variations.push(`55${ddd}9${local}`);
+    }
+  }
+
+  return variations;
+}
+
+/** Normaliza para formato padrão (apenas para log) */
+function normalizePhone(phone: string): string {
+  return normalizePhoneVariations(phone)[0];
 }
 
 function cleanExpiredSessions(): void {
@@ -152,11 +176,10 @@ async function handleIncomingMessage(
   // Clean expired sessions on every call
   cleanExpiredSessions();
 
-  // Look up motorista by WhatsApp number (normalized)
-  const normalizedFrom = normalizePhone(from);
-  console.log(`[Bot] Mensagem recebida de: ${from} (normalizado: ${normalizedFrom})`);
+  // Look up motorista by WhatsApp number (normalized, com variações do 9º dígito)
+  const fromVariations = normalizePhoneVariations(from);
+  console.log(`[Bot] Mensagem de: ${from} | Variações: ${fromVariations.join(', ')}`);
 
-  // Buscar todos motoristas ativos e comparar número normalizado
   const motoristas = await db.motorista.findMany({
     where: {
       active: true,
@@ -164,12 +187,16 @@ async function handleIncomingMessage(
     },
   });
 
-  console.log(`[Bot] Motoristas no banco: ${motoristas.map((m) => `${m.nome}: ${m.whatsapp} -> ${normalizePhone(m.whatsapp || '')}`).join(', ')}`);
-
   const motorista = motoristas.find((m) => {
     if (!m.whatsapp) return false;
-    return normalizePhone(m.whatsapp) === normalizedFrom;
+    const mVariations = normalizePhoneVariations(m.whatsapp);
+    // Match se qualquer variação do remetente bater com qualquer variação do cadastro
+    return fromVariations.some((fv) => mVariations.includes(fv));
   });
+
+  if (!motorista) {
+    console.log(`[Bot] Nenhum match. Motoristas: ${motoristas.map((m) => `${m.nome}: ${m.whatsapp} -> ${normalizePhoneVariations(m.whatsapp || '').join('/')}`).join(' | ')}`);
+  }
 
   if (!motorista) {
     await whatsapp.sendText(
