@@ -21,10 +21,14 @@ services:
       - WHATSAPP_BUSINESS_TOKEN=${WHATSAPP_BUSINESS_TOKEN:-}
       - WHATSAPP_BUSINESS_PHONE_ID=${WHATSAPP_BUSINESS_PHONE_ID:-}
       - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-}
-      # IA
+      # IA - Provedor: "claude", "kimi" ou "openai"
       - AI_PROVIDER=${AI_PROVIDER:-claude}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-5-20250929}
+      - KIMI_API_KEY=${KIMI_API_KEY:-}
+      - KIMI_MODEL=${KIMI_MODEL:-kimi-k2.5}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
     depends_on:
       postgres:
         condition: service_healthy

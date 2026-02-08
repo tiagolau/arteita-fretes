@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 // ============================================
 // TYPES
@@ -42,14 +43,182 @@ interface ClassifyOpportunityConfig {
   minPricePerTon: number;
 }
 
+type AiProvider = 'claude' | 'kimi' | 'openai';
+
 // ============================================
-// AI CLIENT
+// AI PROVIDER DETECTION
 // ============================================
+
+function getProvider(): AiProvider {
+  const provider = (process.env.AI_PROVIDER || 'claude').toLowerCase();
+  if (provider === 'kimi' || provider === 'moonshot') return 'kimi';
+  if (provider === 'openai') return 'openai';
+  return 'claude';
+}
 
 function getAnthropicClient(): Anthropic {
   return new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
+}
+
+function getKimiClient(): OpenAI {
+  return new OpenAI({
+    apiKey: process.env.KIMI_API_KEY,
+    baseURL: 'https://api.moonshot.ai/v1',
+  });
+}
+
+function getOpenAIClient(): OpenAI {
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
+
+function getOpenAICompatibleClient(): OpenAI {
+  const provider = getProvider();
+  if (provider === 'kimi') return getKimiClient();
+  return getOpenAIClient();
+}
+
+function getModel(): string {
+  const provider = getProvider();
+  switch (provider) {
+    case 'kimi':
+      return process.env.KIMI_MODEL || 'kimi-k2.5';
+    case 'openai':
+      return process.env.OPENAI_MODEL || 'gpt-4o';
+    case 'claude':
+    default:
+      return process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
+  }
+}
+
+// ============================================
+// GENERIC AI CALL
+// ============================================
+
+async function callAI(params: {
+  systemPrompt: string;
+  userText?: string;
+  imageBase64?: string;
+  imageMediaType?: string;
+}): Promise<string> {
+  const provider = getProvider();
+
+  if (provider === 'claude') {
+    return callAnthropic(params);
+  }
+
+  return callOpenAICompatible(params);
+}
+
+async function callAnthropic(params: {
+  systemPrompt: string;
+  userText?: string;
+  imageBase64?: string;
+  imageMediaType?: string;
+}): Promise<string> {
+  const client = getAnthropicClient();
+
+  const content: Anthropic.MessageCreateParams['messages'][0]['content'] = [];
+
+  if (params.imageBase64) {
+    const mediaType = (params.imageMediaType || 'image/jpeg') as
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/webp';
+
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: mediaType,
+        data: params.imageBase64,
+      },
+    });
+  }
+
+  if (params.userText) {
+    content.push({ type: 'text', text: params.userText });
+  }
+
+  if (content.length === 0) {
+    throw new Error('Nenhum input fornecido para a IA.');
+  }
+
+  const response = await client.messages.create({
+    model: getModel(),
+    max_tokens: 1024,
+    system: params.systemPrompt,
+    messages: [{ role: 'user', content }],
+  });
+
+  const textBlock = response.content.find((block) => block.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') {
+    throw new Error('Sem resposta de texto da IA (Anthropic)');
+  }
+
+  return textBlock.text.trim();
+}
+
+async function callOpenAICompatible(params: {
+  systemPrompt: string;
+  userText?: string;
+  imageBase64?: string;
+  imageMediaType?: string;
+}): Promise<string> {
+  const client = getOpenAICompatibleClient();
+
+  const userContent: OpenAI.ChatCompletionContentPart[] = [];
+
+  if (params.imageBase64) {
+    const mediaType = params.imageMediaType || 'image/jpeg';
+    userContent.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${mediaType};base64,${params.imageBase64}`,
+      },
+    });
+  }
+
+  if (params.userText) {
+    userContent.push({ type: 'text', text: params.userText });
+  }
+
+  if (userContent.length === 0) {
+    throw new Error('Nenhum input fornecido para a IA.');
+  }
+
+  const response = await client.chat.completions.create({
+    model: getModel(),
+    max_tokens: 1024,
+    messages: [
+      { role: 'system', content: params.systemPrompt },
+      { role: 'user', content: userContent },
+    ],
+  });
+
+  const text = response.choices[0]?.message?.content;
+  if (!text) {
+    throw new Error('Sem resposta de texto da IA');
+  }
+
+  return text.trim();
+}
+
+// ============================================
+// PARSE JSON RESPONSE
+// ============================================
+
+function parseJsonResponse(rawText: string): Record<string, unknown> {
+  let jsonString = rawText;
+  const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    jsonString = jsonMatch[1].trim();
+  }
+  return JSON.parse(jsonString);
 }
 
 // ============================================
@@ -61,86 +230,35 @@ const EXTRACT_SYSTEM_PROMPT = `Voce e um assistente que extrai dados de tickets 
 export async function extractFreightData(
   input: ExtractFreightInput
 ): Promise<FreightExtractedData> {
-  const client = getAnthropicClient();
-
-  const content: Anthropic.MessageCreateParams['messages'][0]['content'] = [];
-
-  if (input.imageBase64) {
-    const mediaType = (input.imageMediaType || 'image/jpeg') as
-      | 'image/jpeg'
-      | 'image/png'
-      | 'image/gif'
-      | 'image/webp';
-
-    content.push({
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: mediaType,
-        data: input.imageBase64,
-      },
-    });
-  }
-
-  if (input.text) {
-    content.push({
-      type: 'text',
-      text: input.text,
-    });
-  }
-
-  if (content.length === 0) {
-    throw new Error(
-      '[extractFreightData] No input provided. Provide imageBase64 or text.'
-    );
+  if (!input.imageBase64 && !input.text) {
+    throw new Error('Forneça imageBase64 ou text.');
   }
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1024,
-      system: EXTRACT_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content,
-        },
-      ],
+    const rawText = await callAI({
+      systemPrompt: EXTRACT_SYSTEM_PROMPT,
+      userText: input.text,
+      imageBase64: input.imageBase64,
+      imageMediaType: input.imageMediaType,
     });
 
-    const textBlock = response.content.find((block) => block.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      throw new Error('No text response from Claude');
-    }
-
-    const rawText = textBlock.text.trim();
-
-    // Try to extract JSON from the response (handle potential markdown code blocks)
-    let jsonString = rawText;
-    const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonString = jsonMatch[1].trim();
-    }
-
-    const parsed = JSON.parse(jsonString);
+    const parsed = parseJsonResponse(rawText);
 
     return {
-      data: parsed.data ?? null,
-      origem: parsed.origem ?? null,
-      destino: parsed.destino ?? null,
+      data: (parsed.data as string) ?? null,
+      origem: (parsed.origem as string) ?? null,
+      destino: (parsed.destino as string) ?? null,
       toneladas: parsed.toneladas != null ? Number(parsed.toneladas) : null,
-      precoTonelada:
-        parsed.precoTonelada != null ? Number(parsed.precoTonelada) : null,
-      valorTotal:
-        parsed.valorTotal != null ? Number(parsed.valorTotal) : null,
-      transportadora: parsed.transportadora ?? null,
-      ticketNota: parsed.ticketNota ?? null,
-      placa: parsed.placa ?? null,
-      motorista: parsed.motorista ?? null,
-      observacao: parsed.observacao ?? null,
+      precoTonelada: parsed.precoTonelada != null ? Number(parsed.precoTonelada) : null,
+      valorTotal: parsed.valorTotal != null ? Number(parsed.valorTotal) : null,
+      transportadora: (parsed.transportadora as string) ?? null,
+      ticketNota: (parsed.ticketNota as string) ?? null,
+      placa: (parsed.placa as string) ?? null,
+      motorista: (parsed.motorista as string) ?? null,
+      observacao: (parsed.observacao as string) ?? null,
     };
   } catch (error) {
-    console.error('[extractFreightData] Error extracting freight data:', error);
+    console.error('[extractFreightData] Erro:', error);
     throw error;
   }
 }
@@ -153,8 +271,6 @@ export async function classifyOpportunity(
   message: string,
   config: ClassifyOpportunityConfig
 ): Promise<OpportunityClassification> {
-  const client = getAnthropicClient();
-
   const systemPrompt = `Voce e um assistente que analisa mensagens de grupos de WhatsApp para identificar oportunidades de frete.
 
 Analise a mensagem e determine:
@@ -183,49 +299,28 @@ Retorne APENAS JSON no formato:
 }`;
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: message,
-        },
-      ],
+    const rawText = await callAI({
+      systemPrompt,
+      userText: message,
     });
 
-    const textBlock = response.content.find((block) => block.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      throw new Error('No text response from Claude');
-    }
-
-    const rawText = textBlock.text.trim();
-
-    let jsonString = rawText;
-    const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonString = jsonMatch[1].trim();
-    }
-
-    const parsed = JSON.parse(jsonString);
+    const parsed = parseJsonResponse(rawText);
 
     return {
       isOpportunity: Boolean(parsed.isOpportunity),
-      tipoCarga: parsed.tipoCarga ?? null,
-      origem: parsed.origem ?? null,
-      destino: parsed.destino ?? null,
+      tipoCarga: (parsed.tipoCarga as string) ?? null,
+      origem: (parsed.origem as string) ?? null,
+      destino: (parsed.destino as string) ?? null,
       tonelagem: parsed.tonelagem != null ? Number(parsed.tonelagem) : null,
-      precoOferecido:
-        parsed.precoOferecido != null ? Number(parsed.precoOferecido) : null,
-      urgencia: parsed.urgencia ?? null,
-      contato: parsed.contato ?? null,
-      prioridade: ['ALTA', 'MEDIA', 'BAIXA'].includes(parsed.prioridade)
-        ? parsed.prioridade
+      precoOferecido: parsed.precoOferecido != null ? Number(parsed.precoOferecido) : null,
+      urgencia: (parsed.urgencia as string) ?? null,
+      contato: (parsed.contato as string) ?? null,
+      prioridade: ['ALTA', 'MEDIA', 'BAIXA'].includes(parsed.prioridade as string)
+        ? (parsed.prioridade as 'ALTA' | 'MEDIA' | 'BAIXA')
         : 'BAIXA',
     };
   } catch (error) {
-    console.error('[classifyOpportunity] Error classifying opportunity:', error);
+    console.error('[classifyOpportunity] Erro:', error);
     throw error;
   }
 }
