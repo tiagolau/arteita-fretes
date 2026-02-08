@@ -70,6 +70,20 @@ const FIELD_LABELS: Record<string, string> = {
 // HELPER FUNCTIONS
 // ============================================
 
+/**
+ * Normaliza número de telefone para formato apenas dígitos.
+ * Remove +, espaços, parênteses, hífens.
+ * Se o número tem 10-11 dígitos (sem código do país), adiciona 55 (Brasil).
+ */
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  // Se tem 10 ou 11 dígitos, assumir Brasil e adicionar 55
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+  return digits;
+}
+
 function cleanExpiredSessions(): void {
   const now = Date.now();
   for (const [key, session] of sessions.entries()) {
@@ -138,12 +152,20 @@ async function handleIncomingMessage(
   // Clean expired sessions on every call
   cleanExpiredSessions();
 
-  // Look up motorista by WhatsApp number
-  const motorista = await db.motorista.findFirst({
+  // Look up motorista by WhatsApp number (normalized)
+  const normalizedFrom = normalizePhone(from);
+
+  // Buscar todos motoristas ativos e comparar número normalizado
+  const motoristas = await db.motorista.findMany({
     where: {
-      whatsapp: from,
       active: true,
+      whatsapp: { not: null },
     },
+  });
+
+  const motorista = motoristas.find((m) => {
+    if (!m.whatsapp) return false;
+    return normalizePhone(m.whatsapp) === normalizedFrom;
   });
 
   if (!motorista) {

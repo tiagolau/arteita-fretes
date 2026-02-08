@@ -10,3 +10,4 @@ coverage/
 *.log
 *.tsbuildinfo
 next-env.d.ts
+backup_arteita.sql
