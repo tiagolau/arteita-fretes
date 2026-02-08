@@ -94,6 +94,7 @@ export class WhatsAppService {
   }
 
   async sendText(number: string, text: string): Promise<void> {
+    console.log(`[WhatsAppService] Enviando texto para ${number} (${text.length} chars)`);
     await this.loadConfig();
 
     // Tenta Evolution primeiro
@@ -102,6 +103,7 @@ export class WhatsAppService {
         const connected = await this.evolutionClient.isConnected();
         if (connected) {
           await this.evolutionClient.sendText({ number, text });
+          console.log(`[WhatsAppService] Texto enviado via Evolution para ${number}`);
           return;
         }
       } catch (error) {
@@ -112,9 +114,11 @@ export class WhatsAppService {
     // Fallback: Meta Official
     if (this.officialClient?.isConfigured()) {
       await this.officialClient.sendText(number, text);
+      console.log(`[WhatsAppService] Texto enviado via Meta Official para ${number}`);
       return;
     }
 
+    console.error('[WhatsAppService] Erro: Nenhuma API WhatsApp disponível para envio');
     throw new Error('[WhatsAppService] Nenhuma API WhatsApp disponível.');
   }
 

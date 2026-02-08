@@ -208,6 +208,8 @@ async function handleIncomingMessage(
 
   let session = getSession(from);
 
+  console.log(`[Bot] Sessão atual para ${from}: ${session ? session.state : 'NOVA'} | Motorista: ${motorista.nome}`);
+
   // If no session exists, start a new one
   if (!session) {
     session = {
@@ -219,7 +221,14 @@ async function handleIncomingMessage(
       motoristaNome: motorista.nome,
     };
     setSession(from, session);
+    console.log(`[Bot] Nova sessão criada (IDLE)`);
+  } else {
+    // Atualiza timestamp
+    session.lastActivity = new Date();
+    sessions.set(from, session);
   }
+
+  const oldState = session.state;
 
   switch (session.state) {
     case 'IDLE':
@@ -239,9 +248,14 @@ async function handleIncomingMessage(
       break;
 
     default:
+      console.warn(`[Bot] Estado desconhecido: ${session.state}. Resetando para IDLE.`);
       session.state = 'IDLE';
       setSession(from, session);
       await handleIdle(from, session);
+  }
+
+  if (oldState !== session.state) {
+    console.log(`[Bot] Transição de estado: ${oldState} -> ${session.state} para ${from}`);
   }
 }
 
@@ -253,6 +267,7 @@ async function handleIdle(
   from: string,
   session: ConversationSession
 ): Promise<void> {
+  console.log(`[Bot] handleIdle: Enviando boas-vindas para ${from}`);
   await whatsapp.sendText(
     from,
     `Ola ${session.motoristaNome}! Envie o ticket do frete (foto ou PDF) para registrar.`
@@ -273,6 +288,7 @@ async function handleAwaitingTicket(
       (message.type === 'image' || message.type === 'document') &&
       message.mediaMessageId
     ) {
+      console.log(`[Bot] Recebida Mídia (${message.type}). Iniciando extração IA...`);
       // Download media and extract data from image
       const mediaBuffer = await whatsapp.downloadMedia(message.mediaMessageId);
       const base64 = mediaBuffer.toString('base64');
@@ -287,21 +303,26 @@ async function handleAwaitingTicket(
       message.type === 'image' &&
       message.imageBase64
     ) {
+      console.log(`[Bot] Recebida Imagem Base64. Iniciando extração IA...`);
       extractedData = await extractFreightData({
         imageBase64: message.imageBase64,
         imageMediaType: message.imageMediaType || 'image/jpeg',
       });
     } else if (message.text) {
+      console.log(`[Bot] Recebido Texto. Iniciando extração IA...`);
       extractedData = await extractFreightData({
         text: message.text,
       });
     } else {
+      console.log(`[Bot] Mensagem não suportada ou sem conteúdo válido.`);
       await whatsapp.sendText(
         from,
         'Por favor, envie uma foto do ticket, um PDF ou uma descricao em texto do frete.'
       );
       return;
     }
+
+    console.log(`[Bot] Extração IA concluída com sucesso. Dados:`, JSON.stringify(extractedData));
   } catch (error) {
     console.error('[Bot] Error extracting freight data:', error);
     await whatsapp.sendText(
