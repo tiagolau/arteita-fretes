@@ -232,7 +232,7 @@ async function handleIncomingMessage(
 
   switch (session.state) {
     case 'IDLE':
-      await handleIdle(from, session);
+      await handleIdle(from, session, message);
       break;
 
     case 'AWAITING_TICKET':
@@ -251,7 +251,7 @@ async function handleIncomingMessage(
       console.warn(`[Bot] Estado desconhecido: ${session.state}. Resetando para IDLE.`);
       session.state = 'IDLE';
       setSession(from, session);
-      await handleIdle(from, session);
+      await handleIdle(from, session, message);
   }
 
   if (oldState !== session.state) {
@@ -265,8 +265,18 @@ async function handleIncomingMessage(
 
 async function handleIdle(
   from: string,
-  session: ConversationSession
+  session: ConversationSession,
+  message?: MessagePayload // Adicionado parametro opcional message
 ): Promise<void> {
+  // Se já veio com mídia na primeira mensagem, processa direto
+  if (message && (message.type === 'image' || message.type === 'document' || message.imageBase64)) {
+    console.log(`[Bot] handleIdle: Mídia detectada na primeira mensagem. Processando como ticket...`);
+    session.state = 'AWAITING_TICKET';
+    setSession(from, session);
+    await handleAwaitingTicket(from, message, session);
+    return;
+  }
+
   console.log(`[Bot] handleIdle: Enviando boas-vindas para ${from}`);
   await whatsapp.sendText(
     from,
