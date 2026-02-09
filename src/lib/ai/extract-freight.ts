@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { db } from '@/lib/db';
 
 // ============================================
 // TYPES
@@ -235,9 +236,26 @@ export async function extractFreightData(
   }
 
   try {
+    // Buscar configurações de IA e Prompt customizado
+    const aiConfig = await db.aiSettings.findFirst({
+      where: { active: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    let systemPrompt = EXTRACT_SYSTEM_PROMPT;
+
+    // Se houver prompt customizado, usa ele
+    if (aiConfig?.freightExtractPrompt) {
+      systemPrompt = aiConfig.freightExtractPrompt;
+      // Garante instrução JSON se não tiver
+      if (!systemPrompt.includes('JSON')) {
+        systemPrompt += '\n\nIMPORTANTE: Retorne APENAS um objeto JSON válido com os campos extraídos, sem markdown.';
+      }
+    }
+
     const rawText = await callAI({
-      systemPrompt: EXTRACT_SYSTEM_PROMPT,
-      userText: input.text,
+      systemPrompt: systemPrompt,
+      userText: input.text ? `Texto da mensagem (Contexto complementar): "${input.text}"` : undefined,
       imageBase64: input.imageBase64,
       imageMediaType: input.imageMediaType,
     });

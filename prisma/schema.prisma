@@ -219,3 +219,23 @@ model Oportunidade {
 
   @@map("oportunidades")
 }
+
+// ============================================
+// IA - CONFIGURAÇÃO (PROMPTS DINÂMICOS)
+// ============================================
+
+model AiSettings {
+  id        String   @id @default(cuid())
+  provider  String   @default("claude") // claude, openai, kimi
+  model     String?  // Modelo específico (opcional)
+  
+  // Prompts
+  freightExtractPrompt String? @map("freight_extract_prompt") // Prompt para extração de tickets
+  groupMonitorPrompt   String? @map("group_monitor_prompt")   // Prompt para monitoramento de grupos
+  
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_settings")
+}

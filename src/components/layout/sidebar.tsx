@@ -14,6 +14,7 @@ import {
   ChevronDown,
   MessageSquare,
   Settings,
+  Brain,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -37,6 +38,7 @@ const navigation = [
     icon: ChevronDown,
     children: [
       { name: 'WhatsApp', href: '/configuracoes/whatsapp', icon: Settings },
+      { name: 'IA & Prompts', href: '/configuracoes/ia', icon: Brain },
     ],
   },
 ];
