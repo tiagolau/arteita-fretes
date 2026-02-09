@@ -27,31 +27,40 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
+        console.log('[AiSettings] Received body:', JSON.stringify(body, null, 2));
+
         const result = aiSettingsSchema.safeParse(body);
 
         if (!result.success) {
+            console.log('[AiSettings] Validation failed:', result.error);
             return NextResponse.json({ error: 'Dados inválidos', details: result.error }, { status: 400 });
         }
 
         const { provider, model, freightExtractPrompt, groupMonitorPrompt } = result.data;
+        console.log('[AiSettings] Parsed data:', { provider, model, hasPrompt: !!freightExtractPrompt });
 
         // Busca configuração existente ou cria nova
         const existing = await db.aiSettings.findFirst({
             where: { active: true },
         });
 
+        console.log('[AiSettings] Existing config:', existing ? `ID: ${existing.id}, provider: ${existing.provider}` : 'none');
+
         let config;
 
         if (existing) {
             // Atualiza apenas os campos fornecidos
+            const updateData: any = {};
+            if (provider) updateData.provider = provider;
+            if (model !== undefined) updateData.model = model;
+            if (freightExtractPrompt !== undefined) updateData.freightExtractPrompt = freightExtractPrompt;
+            if (groupMonitorPrompt !== undefined) updateData.groupMonitorPrompt = groupMonitorPrompt;
+
+            console.log('[AiSettings] Update data:', Object.keys(updateData));
+
             config = await db.aiSettings.update({
                 where: { id: existing.id },
-                data: {
-                    ...(provider && { provider }),
-                    ...(model !== undefined && { model }),
-                    ...(freightExtractPrompt !== undefined && { freightExtractPrompt }),
-                    ...(groupMonitorPrompt !== undefined && { groupMonitorPrompt }),
-                },
+                data: updateData,
             });
         } else {
             config = await db.aiSettings.create({
@@ -65,6 +74,7 @@ export async function POST(request: Request) {
             });
         }
 
+        console.log('[AiSettings] Saved successfully:', config.id);
         return NextResponse.json(config);
     } catch (error) {
         console.error('[AiSettings] Error saving config:', error);
