@@ -26,7 +26,14 @@
       "WebFetch(domain:deepwiki.com)",
       "WebFetch(domain:docs.evoapicloud.com)",
       "WebFetch(domain:www.npmjs.com)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: adicionar logs de debug na busca de motorista por WhatsApp\n\nAdiciona console.log para diagnosticar problema de número não reconhecido\nno webhook do WhatsApp \\(normalização de telefone\\).\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: normalizar telefone com variações do 9º dígito brasileiro\n\nO WhatsApp pode enviar números com ou sem o 9º dígito \\(ex: 553191570107\nvs 5531991570107\\). Agora o bot gera variações de ambos os formatos e\ncompara cruzando todas as possibilidades.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "WebFetch(domain:platform.moonshot.ai)",
+      "Bash(npm ls:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: suporte multi-provedor IA \\(Claude, Kimi, OpenAI\\)\n\nRefatora extract-freight.ts para suportar 3 provedores de IA:\n- Claude \\(Anthropic\\) - padrão\n- Kimi \\(Moonshot AI\\) - alternativa mais barata com suporte a visão\n- OpenAI \\(GPT-4o\\)\n\nConfigurável via AI_PROVIDER env var. Adiciona openai SDK.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

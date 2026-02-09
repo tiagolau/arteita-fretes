@@ -67,6 +67,13 @@ export async function POST(request: Request) {
         return NextResponse.json(config);
     } catch (error) {
         console.error('[AiSettings] Error saving config:', error);
-        return NextResponse.json({ error: 'Erro ao salvar configurações' }, { status: 500 });
+        // Captura mais detalhes do erro
+        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        return NextResponse.json({
+            error: 'Erro ao salvar configurações',
+            message: errorMessage,
+            stack: errorStack
+        }, { status: 500 });
     }
 }

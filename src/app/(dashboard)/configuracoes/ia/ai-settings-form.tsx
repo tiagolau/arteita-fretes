@@ -73,15 +73,18 @@ export default function AiSettingsForm() {
                 body: JSON.stringify(settings),
             });
 
+            const data = await res.json();
+
             if (res.ok) {
                 alert('Configurações salvas com sucesso!');
                 router.refresh();
             } else {
-                alert('Erro ao salvar configurações.');
+                console.error('Erro da API:', data);
+                alert(`Erro ao salvar configurações: ${data.error || 'Erro desconhecido'}${data.details ? ` - ${JSON.stringify(data.details)}` : ''}`);
             }
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            alert('Erro ao salvar configurações.');
+            alert('Erro ao salvar configurações. Verifique o console para detalhes.');
         } finally {
             setSaving(false);
         }
