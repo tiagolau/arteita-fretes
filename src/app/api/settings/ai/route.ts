@@ -43,13 +43,14 @@ export async function POST(request: Request) {
         let config;
 
         if (existing) {
+            // Atualiza apenas os campos fornecidos
             config = await db.aiSettings.update({
                 where: { id: existing.id },
                 data: {
-                    provider: provider || existing.provider,
-                    model: model || existing.model,
-                    freightExtractPrompt: freightExtractPrompt !== undefined ? freightExtractPrompt : existing.freightExtractPrompt,
-                    groupMonitorPrompt: groupMonitorPrompt !== undefined ? groupMonitorPrompt : existing.groupMonitorPrompt,
+                    ...(provider && { provider }),
+                    ...(model !== undefined && { model }),
+                    ...(freightExtractPrompt !== undefined && { freightExtractPrompt }),
+                    ...(groupMonitorPrompt !== undefined && { groupMonitorPrompt }),
                 },
             });
         } else {
